@@ -1,11 +1,34 @@
+import 'package:firebase_auth/firebase_auth.dart';
+import 'package:firebase_database/firebase_database.dart';
 import 'package:flutter/material.dart';
 import 'package:firebase_core/firebase_core.dart';
+import 'package:flutter_dotenv/flutter_dotenv.dart';
+import 'package:realtime_quiz_app/web/quiz_manager_page.dart';
 import 'firebase_options.dart';
+
+FirebaseDatabase? database;
 
 void main() async {
   WidgetsFlutterBinding.ensureInitialized();
+  await dotenv.load();
 
   await Firebase.initializeApp(options: DefaultFirebaseOptions.currentPlatform);
+
+  String? host;
+  String? baseUrl;
+
+  host = dotenv.env['FIREBASE_DATABASE_HOST'];
+  baseUrl = dotenv.env['FIREBASE_AUTH_BASEURL'];
+
+  database = FirebaseDatabase.instanceFor(
+    app: Firebase.app(),
+    databaseURL: '$host/?ns=${dotenv.env['FIREBASE_DATABASE_PROJECT_ID']}',
+  );
+
+  await FirebaseAuth.instance.useAuthEmulator(
+    baseUrl!,
+    int.parse(dotenv.env['FIREBASE_AUTH_PORT']!),
+  );
 
   runApp(const MyApp());
 }
@@ -38,19 +61,6 @@ class MyHomePage extends StatefulWidget {
 class _MyHomePageState extends State<MyHomePage> {
   @override
   Widget build(BuildContext context) {
-    return Scaffold(
-      appBar: AppBar(
-        backgroundColor: Theme.of(context).colorScheme.inversePrimary,
-        title: Text(widget.title),
-      ),
-      body: Center(
-        child: Column(
-          mainAxisAlignment: MainAxisAlignment.center,
-          children: <Widget>[
-            const Text('You have pushed the button this many times:'),
-          ],
-        ),
-      ),
-    );
+    return const QuizManagerPage();
   }
 }
