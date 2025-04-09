@@ -182,6 +182,7 @@ class _QuizManagerPageState extends State<QuizManagerPage> {
     });
   }
 
+  //문제 추가시 반영.
   streamQuizzes() {
     database!.ref('quiz').onValue.listen((event) {
       if (event.snapshot.value == null) return;
@@ -194,6 +195,67 @@ class _QuizManagerPageState extends State<QuizManagerPage> {
       setState(() {});
       //debugPrint(event.snapshot.children.map((e) => e.value));
     });
+  }
+
+  startQuiz(Quiz item) async {
+    final stateRef =
+        await database?.ref('quizStatus/${item.quizDetailRef}/state').get();
+    final currentState = stateRef?.value as bool;
+    if (currentState) {
+      return;
+    }
+
+    // 문제의 개수.
+    final detailRef =
+        await database?.ref('quizDetail/${item.quizDetailRef}').get();
+    final problemCount = detailRef?.child('problems').children.length ?? 0;
+
+    DateTime nowDateTime = DateTime.now();
+    List<Map> triggerTimes = [];
+
+    int solveTime = 5; //문제별 푸는 시간.
+
+    for (var i = 0; i < problemCount; i++) {
+      final startTime = nowDateTime.add(Duration(seconds: 5 + (i * solveTime)));
+      final endTime = startTime.add(const Duration(seconds: 5));
+      triggerTimes.add({
+        "startTime": startTime.millisecondsSinceEpoch,
+        "endTime": endTime.millisecondsSinceEpoch,
+      });
+      nowDateTime = endTime;
+    }
+    if (!mounted) return;
+    showDialog(
+      context: context,
+      builder:
+          (context) => AlertDialog(
+            content: const Text('퀴즈를 시작할까요?'),
+            actions: [
+              TextButton(
+                onPressed: () {
+                  Navigator.of(context).pop();
+                },
+                child: const Text('No'),
+              ),
+              TextButton(
+                onPressed: () async {
+                  await database
+                      ?.ref('quizStatus/${item.quizDetailRef}')
+                      .update({
+                        "state": true,
+                        "current": 0,
+                        "triggers": triggerTimes,
+                      });
+
+                  if (!context.mounted) return;
+
+                  Navigator.of(context).pop();
+                },
+                child: const Text('Yes'),
+              ),
+            ],
+          ),
+    );
   }
 
   @override
@@ -266,26 +328,7 @@ class _QuizManagerPageState extends State<QuizManagerPage> {
                         title: Text('code: ${quizList[index].pinCode}'),
                         subtitle: Text('${quizList[index].quizDetailRef}'),
                         onTap: () {
-                          showDialog(
-                            context: context,
-                            builder: (context) {
-                              return AlertDialog(
-                                content: const Text('퀴즈를 시작할까요?'),
-                                actions: [
-                                  TextButton(
-                                    onPressed: () {
-                                      Navigator.of(context).pop();
-                                    },
-                                    child: const Text('No'),
-                                  ),
-                                  TextButton(
-                                    onPressed: () {},
-                                    child: const Text('Yes'),
-                                  ),
-                                ],
-                              );
-                            },
-                          );
+                          startQuiz(quizList[index]);
                         },
                       );
                     },
