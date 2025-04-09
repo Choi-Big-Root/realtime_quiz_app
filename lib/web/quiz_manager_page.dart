@@ -185,7 +185,6 @@ class _QuizManagerPageState extends State<QuizManagerPage> {
             builder: (context) => const QuizBottomSheetWidget(),
           );
 
-          print(quiz);
           setState(() {
             quizItems.add(quiz);
           });
