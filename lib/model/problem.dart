@@ -12,3 +12,31 @@ class ProblemManager {
     return "index : $index, Text : ${textEditingController?.text}";
   }
 }
+
+class Problems {
+  String? title;
+  List<String>? options;
+  int? answerIndex;
+  String? answer;
+
+  Problems({
+    required this.title,
+    required this.options,
+    required this.answerIndex,
+    required this.answer,
+  });
+
+  factory Problems.fromJson(Map<String, dynamic> json) => Problems(
+    title: json['title'] as String?,
+    options: json['options'] as List<String>?,
+    answerIndex: json['answerIndex'] as int?,
+    answer: json['answer'] as String?,
+  );
+
+  Map<String, dynamic> toJson(Problems problems) => <String, dynamic>{
+    'title': problems.title,
+    'options': problems.options,
+    'answerIndex': problems.answerIndex,
+    'answer': problems.answer,
+  };
+}

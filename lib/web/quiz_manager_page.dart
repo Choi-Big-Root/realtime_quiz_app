@@ -1,3 +1,4 @@
+import 'dart:convert';
 import 'dart:math';
 
 import 'package:firebase_auth/firebase_auth.dart';
@@ -120,6 +121,8 @@ class _QuizManagerPageState extends State<QuizManagerPage> {
     ),
   ];
 
+  List<Quiz> quizList = [];
+
   // 익명 로그인 정보. uid에 저장.
   signInAnonymously() {
     FirebaseAuth.instance
@@ -144,7 +147,7 @@ class _QuizManagerPageState extends State<QuizManagerPage> {
     // 문제 set
     final newQuizDetailRef = quizDetailRef.push(); //고유키 생성.
     await newQuizDetailRef.set({
-      "code": pinCode,
+      "pinCode": pinCode,
       "problems":
           quizItems
               .map(
@@ -171,7 +174,7 @@ class _QuizManagerPageState extends State<QuizManagerPage> {
 
     final newQuizRef = quizRef.push();
     await newQuizRef.set({
-      "code": pinCode,
+      "pinCode": pinCode,
       "uid": uid,
       "generateTime": DateTime.now().toString(),
       "timeStamp": DateTime.now().millisecondsSinceEpoch,
@@ -179,10 +182,25 @@ class _QuizManagerPageState extends State<QuizManagerPage> {
     });
   }
 
+  streamQuizzes() {
+    database!.ref('quiz').onValue.listen((event) {
+      if (event.snapshot.value == null) return;
+      quizList.clear();
+      final datas = event.snapshot.children;
+      for (var data in datas) {
+        final item = jsonDecode(jsonEncode(data.value));
+        quizList.add(Quiz.fromJson(item));
+      }
+      setState(() {});
+      //debugPrint(event.snapshot.children.map((e) => e.value));
+    });
+  }
+
   @override
   void initState() {
     super.initState();
     signInAnonymously();
+    streamQuizzes();
   }
 
   @override
@@ -242,9 +260,34 @@ class _QuizManagerPageState extends State<QuizManagerPage> {
                   ),
                   ListView.builder(
                     scrollDirection: Axis.vertical,
-                    itemCount: 2,
+                    itemCount: quizList.length,
                     itemBuilder: (BuildContext context, int index) {
-                      return const ExpansionTile(title: Text('뭔디2'));
+                      return ListTile(
+                        title: Text('code: ${quizList[index].pinCode}'),
+                        subtitle: Text('${quizList[index].quizDetailRef}'),
+                        onTap: () {
+                          showDialog(
+                            context: context,
+                            builder: (context) {
+                              return AlertDialog(
+                                content: const Text('퀴즈를 시작할까요?'),
+                                actions: [
+                                  TextButton(
+                                    onPressed: () {
+                                      Navigator.of(context).pop();
+                                    },
+                                    child: const Text('No'),
+                                  ),
+                                  TextButton(
+                                    onPressed: () {},
+                                    child: const Text('Yes'),
+                                  ),
+                                ],
+                              );
+                            },
+                          );
+                        },
+                      );
                     },
                   ),
                 ],
