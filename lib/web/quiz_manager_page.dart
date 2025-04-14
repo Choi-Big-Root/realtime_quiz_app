@@ -96,7 +96,6 @@ class _QuizManagerPageState extends State<QuizManagerPage> {
       ),
     ),
   ];*/
-
   List<QuizManager> quizItems = [
     QuizManager(
       problems: [
@@ -140,12 +139,12 @@ class _QuizManagerPageState extends State<QuizManagerPage> {
       return;
     }
     final pinCode = Random().nextInt(999999).toString().padLeft(6);
-    final quizRef = database!.ref('quiz');
-    final quizDetailRef = database!.ref('quizDetail');
-    final quizStatusRef = database!.ref('quizStatus');
+    final quizRef = database?.ref('quiz');
+    final quizDetailRef = database?.ref('quizDetail');
+    final quizStatusRef = database?.ref('quizStatus');
 
     // 문제 set
-    final newQuizDetailRef = quizDetailRef.push(); //고유키 생성.
+    final newQuizDetailRef = quizDetailRef!.push(); //고유키 생성.
     await newQuizDetailRef.set({
       "pinCode": pinCode,
       "problems":
@@ -164,7 +163,7 @@ class _QuizManagerPageState extends State<QuizManagerPage> {
     });
 
     // 문제 상태 set * 빈값은 생성이 되지 않지만 연습하기위해 모델을 생성안해놨으니 앞으로 사용할 필드들을 알 수 있게 정리한다고 생각.
-    await quizStatusRef.child('${newQuizDetailRef.key}').set({
+    await quizStatusRef?.child('${newQuizDetailRef.key}').set({
       "quizDetailRef": newQuizDetailRef.key,
       "user": [],
       "state": false,
@@ -172,7 +171,7 @@ class _QuizManagerPageState extends State<QuizManagerPage> {
       "solve": [{}],
     });
 
-    final newQuizRef = quizRef.push();
+    final newQuizRef = quizRef!.push();
     await newQuizRef.set({
       "pinCode": pinCode,
       "uid": uid,
@@ -184,7 +183,7 @@ class _QuizManagerPageState extends State<QuizManagerPage> {
 
   //문제 추가시 반영.
   streamQuizzes() {
-    database!.ref('quiz').onValue.listen((event) {
+    database?.ref('quiz').onValue.listen((event) {
       if (event.snapshot.value == null) return;
       quizList.clear();
       final datas = event.snapshot.children;
@@ -200,7 +199,7 @@ class _QuizManagerPageState extends State<QuizManagerPage> {
   startQuiz(Quiz item) async {
     final stateRef =
         await database?.ref('quizStatus/${item.quizDetailRef}/state').get();
-    final currentState = stateRef?.value as bool;
+    final currentState = stateRef!.value as bool;
     if (currentState) {
       return;
     }
@@ -208,7 +207,7 @@ class _QuizManagerPageState extends State<QuizManagerPage> {
     // 문제의 개수.
     final detailRef =
         await database?.ref('quizDetail/${item.quizDetailRef}').get();
-    final problemCount = detailRef?.child('problems').children.length ?? 0;
+    final problemCount = detailRef!.child('problems').children.length;
 
     DateTime nowDateTime = DateTime.now();
     List<Map> triggerTimes = [];
@@ -239,8 +238,8 @@ class _QuizManagerPageState extends State<QuizManagerPage> {
               ),
               TextButton(
                 onPressed: () async {
-                  await database
-                      ?.ref('quizStatus/${item.quizDetailRef}')
+                  await database!
+                      .ref('quizStatus/${item.quizDetailRef}')
                       .update({
                         "state": true,
                         "current": 0,
