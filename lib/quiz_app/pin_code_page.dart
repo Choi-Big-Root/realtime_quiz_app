@@ -41,6 +41,8 @@ class _PinCodePageState extends State<PinCodePage> {
       //(dateTimeNow.millisecondsSinceEpoch < generateTime.add(const Duration(days: 1)).millisecondsSinceEpoch)
       if (dateTimeNow.difference(generateTime).inDays < 1) {
         if (data.containsValue(code)) {
+          codeItmes.add(data['quizDetailRef']);
+          /*
           final quizStatusSnapShot =
               await database
                   .ref('quizStatus')
@@ -54,6 +56,7 @@ class _PinCodePageState extends State<PinCodePage> {
               codeItmes.add(data['quizDetailRef']);
             }
           }
+          */
         }
       }
     }

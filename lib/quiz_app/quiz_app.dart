@@ -135,7 +135,32 @@ class _QuizPageState extends State<QuizPage> {
                     ),
                     const Divider(),
                     const Text('퀴즈 시작 상태'),
-                    Expanded(child: Container()),
+                    Expanded(
+                      child: StreamBuilder(
+                        stream: quizStateRef?.child('state').onValue,
+                        builder: (
+                          context,
+                          AsyncSnapshot<DatabaseEvent> snapShot,
+                        ) {
+                          if (!snapShot.hasData) {
+                            return const Center(child: Text('상태 불러오는중...'));
+                          }
+                          final data = snapShot.data!.snapshot.value as bool;
+                          return Center(
+                            child: Text(
+                              switch (data) {
+                                true => '시작!',
+                                false => '대기중..',
+                              },
+                              style: const TextStyle(
+                                fontWeight: FontWeight.bold,
+                                fontSize: 32,
+                              ),
+                            ),
+                          );
+                        },
+                      ),
+                    ),
                   ],
                 ),
               ),
