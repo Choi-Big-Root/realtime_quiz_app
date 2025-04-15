@@ -20,7 +20,10 @@ class QuizDetail {
 
   factory QuizDetail.fromJson(Map<String, dynamic> json) => QuizDetail(
     pinCode: json['pinCode'] as String?,
-    problems: json['problems'] as List<Problems>?,
+    problems:
+        (json['problems'] as List<dynamic>?)
+            ?.map((e) => Problems.fromJson(e as Map<String, dynamic>))
+            .toList(),
   );
 
   Map<String, dynamic> toJson(QuizDetail quizDetail) => <String, dynamic>{

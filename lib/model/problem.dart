@@ -28,7 +28,8 @@ class Problems {
 
   factory Problems.fromJson(Map<String, dynamic> json) => Problems(
     title: json['title'] as String?,
-    options: json['options'] as List<String>?,
+    options:
+        (json['options'] as List<dynamic>?)?.map((e) => e as String).toList(),
     answerIndex: json['answerIndex'] as int?,
     answer: json['answer'] as String?,
   );
