@@ -2,7 +2,9 @@ import 'dart:convert';
 
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:flutter/material.dart';
-import 'package:realtime_quiz_app/main.dart';
+import 'package:realtime_quiz_app/quiz_app/quiz_app.dart';
+
+import '../main.dart';
 
 class PinCodePage extends StatefulWidget {
   const PinCodePage({super.key});
@@ -26,24 +28,36 @@ class _PinCodePageState extends State<PinCodePage> {
   List codeItmes = [];
 
   Future<bool> findPinCode(String code) async {
-    final quizRef = database?.ref('quiz');
-    final result = await quizRef?.get();
+    final quizRef = database.ref('quiz');
+    final quizSnapshot = await quizRef.get();
 
     codeItmes.clear();
-    for (var element in result!.children) {
+    for (var element in quizSnapshot.children) {
       final data =
           jsonDecode(jsonEncode(element.value)) as Map<String, dynamic>;
-
       DateTime dateTimeNow = DateTime.now();
       DateTime generateTime = DateTime.parse(data['generateTime']);
 
       //(dateTimeNow.millisecondsSinceEpoch < generateTime.add(const Duration(days: 1)).millisecondsSinceEpoch)
       if (dateTimeNow.difference(generateTime).inDays < 1) {
         if (data.containsValue(code)) {
-          codeItmes.add(data['quizDetailRef']);
+          final quizStatusSnapShot =
+              await database
+                  .ref('quizStatus')
+                  //.child('${data.containsKey("quizDetailRef")}')
+                  .get();
+          for (var e in quizStatusSnapShot.children) {
+            final statusData =
+                jsonDecode(jsonEncode(e.value)) as Map<String, dynamic>;
+            if (statusData['quizDetailRef'] == data['quizDetailRef'] &&
+                statusData["state"]) {
+              codeItmes.add(data['quizDetailRef']);
+            }
+          }
         }
       }
     }
+    debugPrint(codeItmes.toString());
 
     return codeItmes.isEmpty ? false : true;
   }
@@ -86,7 +100,7 @@ class _PinCodePageState extends State<PinCodePage> {
                     return null;
                   },
                   onSaved: (value) {
-                    pinCode = value;
+                    pinCode = value!.trim();
                   },
                 ),
                 const SizedBox(height: 20),
@@ -103,7 +117,7 @@ class _PinCodePageState extends State<PinCodePage> {
                     return null;
                   },
                   onSaved: (value) {
-                    nickName = value;
+                    nickName = value!.trim();
                   },
                 ),
                 const SizedBox(height: 20),
@@ -113,14 +127,22 @@ class _PinCodePageState extends State<PinCodePage> {
                     if (_formKey.currentState!.validate()) {
                       _formKey.currentState!
                           .save(); //validate()에서 데이터 있는거 확인했으니 save 바로 진행.
-                      debugPrint('$nickName,$pinCode');
-                      findPinCode(pinCode!);
-                      //findPinCode('540500');
 
                       final result = await findPinCode(pinCode!);
                       if (!context.mounted) return;
                       if (result) {
                         debugPrint('연결됨');
+                        Navigator.of(context).push(
+                          MaterialPageRoute(
+                            builder:
+                                (context) => QuizPage(
+                                  quizRef: codeItmes.first,
+                                  name: nickName!,
+                                  uid: uid ?? 'Unknown User',
+                                  code: pinCode!,
+                                ),
+                          ),
+                        );
                       } else {
                         ScaffoldMessenger.of(context).showSnackBar(
                           const SnackBar(content: Text('Pin Code가 일치하지 않습니다.')),
