@@ -5,19 +5,22 @@ import 'package:flutter/material.dart';
 import 'package:firebase_core/firebase_core.dart';
 import 'package:flutter_dotenv/flutter_dotenv.dart';
 import 'package:realtime_quiz_app/quiz_app/pin_code_page.dart';
+import 'package:realtime_quiz_app/web/quiz_manager_page.dart';
 import 'firebase_options.dart';
 
-FirebaseDatabase? database = FirebaseDatabase.instanceFor(
-  app: Firebase.app(),
-  databaseURL:
-      '${defaultTargetPlatform == TargetPlatform.android ? dotenv.env['FIREBASE_ANDROID_DATABASE_HOST'] : dotenv.env['FIREBASE_DATABASE_HOST']}?ns=${dotenv.env['FIREBASE_DATABASE_PROJECT_ID']}',
-);
+late FirebaseDatabase database;
 
 void main() async {
   WidgetsFlutterBinding.ensureInitialized();
   await dotenv.load();
 
   await Firebase.initializeApp(options: DefaultFirebaseOptions.currentPlatform);
+
+  database = FirebaseDatabase.instanceFor(
+    app: Firebase.app(),
+    databaseURL:
+        '${defaultTargetPlatform == TargetPlatform.android ? dotenv.env['FIREBASE_ANDROID_DATABASE_HOST'] : dotenv.env['FIREBASE_DATABASE_HOST']}?ns=${dotenv.env['FIREBASE_DATABASE_PROJECT_ID']}',
+  );
 
   await FirebaseAuth.instance.useAuthEmulator(
     dotenv.env['FIREBASE_AUTH_BASEURL']!,
@@ -33,23 +36,12 @@ class MyApp extends StatelessWidget {
   // This widget is the root of your application.
   @override
   Widget build(BuildContext context) {
-    if (defaultTargetPlatform == TargetPlatform.android ||
-        defaultTargetPlatform == TargetPlatform.iOS) {
-      return MaterialApp(
-        title: 'Real Quiz App',
-        theme: ThemeData(
-          colorScheme: ColorScheme.fromSeed(seedColor: Colors.deepPurple),
-        ),
-        home: const PinCodePage(),
-      );
-    } else {
-      return MaterialApp(
-        title: 'Real Quiz Web',
-        theme: ThemeData(
-          colorScheme: ColorScheme.fromSeed(seedColor: Colors.deepPurple),
-        ),
-        home: const PinCodePage(),
-      );
-    }
+    return MaterialApp(
+      title: kIsWeb ? 'Real Quiz Web' : 'Real Quiz App',
+      theme: ThemeData(
+        colorScheme: ColorScheme.fromSeed(seedColor: Colors.deepPurple),
+      ),
+      home: kIsWeb ? const QuizManagerPage() : const PinCodePage(),
+    );
   }
 }
