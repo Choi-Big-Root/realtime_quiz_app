@@ -3,9 +3,10 @@ import 'dart:convert';
 
 import 'package:firebase_database/firebase_database.dart';
 import 'package:flutter/material.dart';
-import 'package:realtime_quiz_app/main.dart';
-import 'package:realtime_quiz_app/model/problem.dart';
-import 'package:realtime_quiz_app/model/quiz.dart';
+
+import '../main.dart';
+import '../model/problem.dart';
+import '../model/quiz.dart';
 
 class QuizPage extends StatefulWidget {
   final String quizRef;
@@ -16,9 +17,9 @@ class QuizPage extends StatefulWidget {
   const QuizPage({
     super.key,
     required this.quizRef,
+    required this.code,
     required this.name,
     required this.uid,
-    required this.code,
   });
 
   @override
@@ -27,200 +28,249 @@ class QuizPage extends StatefulWidget {
 
 class _QuizPageState extends State<QuizPage> {
   DatabaseReference? quizStateRef;
-  List<Problems>? problemsSets = [];
-  List<Map<String, int>> problemsTriggers = [];
+  List<Problems> problemsSets = [];
+  List<Map<String, int>> problemTriggers = [];
 
-  final String quizStatePath = "quizStatus";
-  final String quizDetailPath = "quizDetail";
+  String quizStatePath = "quizStatus";
+  String quizDetailPath = "quizDetail";
 
-  Future fetchQuizInformation() async {
-    quizStateRef = database.ref('$quizStatePath/${widget.quizRef}');
-    final quizDetailRef = database.ref('$quizDetailPath/${widget.quizRef}');
+  bool isDone = false;
+  List<String> quizResult = [];
 
-    quizDetailRef
-        .get()
-        .then((value) {
-          final obj = jsonDecode(jsonEncode(value.value));
-          final quizDetail = QuizDetail.fromJson(obj);
+  fetchQuizInformations() {
+    quizStateRef = database.ref("$quizStatePath/${widget.quizRef}");
+    final quizDetailRef = database.ref("$quizDetailPath/${widget.quizRef}");
+    quizDetailRef.get().then((value) {
+      final obj = jsonDecode(jsonEncode(value.value));
+      final quizDetail = QuizDetail.fromJson(obj);
 
-          for (var element in quizDetail.problems!) {
-            problemsSets?.add(element);
-          }
-        })
-        .catchError((e) {
-          debugPrint(e.toString());
-        });
-    quizStateRef
-        ?.child('triggers')
-        .get()
-        .then((value) {
-          for (var element in value.children) {
-            final trigger = element.value as Map;
-            problemsTriggers.add({
-              "startTime": trigger['startTime'] as int,
-              "endTime": trigger['endTime'] as int,
-            });
-          }
-          //print(problemsTriggers.toString());
-        })
-        .catchError((e) {
-          debugPrint(e.toString());
-        });
+      quizDetail.problems?.forEach((element) {
+        problemsSets.add(element);
+      });
+      quizStateRef?.child("triggers").get().then((value) {
+        for (var element in value.children) {
+          final trigger = element.value as Map;
+          problemTriggers.add({
+            "startTime": trigger["startTime"],
+            "endTime": trigger["endTime"],
+          });
+        }
+      });
 
-    quizStateRef?.child('users').push().set({
-      "uid": widget.uid,
-      "name": widget.name,
+      quizStateRef?.child("user").push().set({
+        "uid": widget.uid,
+        "name": widget.name,
+      });
     });
+  }
 
-    //debugPrint(quizStateRef.toString());
-    debugPrint(problemsSets.toString());
-    //debugPrint(problemsTriggers.toString());
+  Future calcResult() async {
+    if (!isDone) {
+      isDone = true;
+      final result = await quizStateRef?.child("solve").once();
+      // 사용자 별칭 별 스코어 저장 맵
+      Map<String, double> countMap = {};
+
+      result?.snapshot.children.toList().forEach((element) {
+        final elements = element.children.toList();
+        elements.sort((a, b) {
+          final aa = a.value as Map;
+          final bb = b.value as Map;
+          final aTime = aa["timestamp"] as int;
+          final bTime = bb["timestamp"] as int;
+          return aTime.compareTo(bTime);
+        });
+
+        for (var i = (elements.length - 1); i >= 0; i--) {
+          final element2 = elements[i];
+          final elementMap = element2.value as Map;
+          double score = elementMap["correct"] ? (20 + i) / 1000 : 0;
+          if (countMap.containsKey("${elementMap["name"]}")) {
+            countMap["${elementMap["name"]}"] =
+                (countMap["${elementMap["name"]}"] ?? 0) + 1.00 + (score);
+          } else {
+            countMap["${elementMap["name"]}"] = 1.00 + (score);
+          }
+        }
+      });
+      var sortedKeys = countMap.keys.toList(growable: false)
+        ..sort((k1, k2) => countMap[k2]!.compareTo(countMap[k1]!));
+
+      setState(() {
+        quizResult = sortedKeys;
+      });
+    }
   }
 
   @override
   void initState() {
     super.initState();
-    fetchQuizInformation();
+    fetchQuizInformations();
   }
 
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      appBar: AppBar(title: Text('${widget.name}(코드: ${widget.code})')),
-      body: SafeArea(
-        child: Stack(
-          children: [
-            Positioned.fill(
-              child: Padding(
-                padding: const EdgeInsets.all(8.0),
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    const Text('참가자'),
-                    Expanded(
-                      child: StreamBuilder(
-                        stream: quizStateRef?.child('/users').onValue,
-                        builder: (
-                          BuildContext context,
-                          AsyncSnapshot<DatabaseEvent> snapshot,
-                        ) {
-                          if (snapshot.hasData) {
-                            final item =
-                                snapshot.data!.snapshot.children.toList();
+      appBar: AppBar(title: Text("${widget.name} (코드: ${widget.code})")),
+      body: Stack(
+        children: [
+          Positioned.fill(
+            child: Padding(
+              padding: const EdgeInsets.all(8.0),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  const Text("참가자"),
+                  Expanded(
+                    child: StreamBuilder(
+                      stream: quizStateRef?.child("/user").onValue,
+                      builder: (
+                        BuildContext context,
+                        AsyncSnapshot<DatabaseEvent> snapshot,
+                      ) {
+                        if (snapshot.hasData) {
+                          final items =
+                              snapshot.data?.snapshot.children.toList() ?? [];
 
-                            //print(item);
-                            return ListView.builder(
-                              itemCount: item.length,
-                              itemBuilder: (context, index) {
-                                final data = item[index].value as Map;
-                                return ListTile(
-                                  title: Text('${data['name']}'),
-                                  subtitle: Text('${data['uid']}'),
-                                );
-                              },
-                            );
-                          }
-
-                          return const Center(
+                          return ListView.builder(
+                            itemCount: items.length,
+                            itemBuilder: (context, index) {
+                              final item = items[index].value as Map;
+                              return ListTile(
+                                title: Text("${item["name"]}"),
+                                subtitle: Text("${item["uid"]}"),
+                              );
+                            },
+                          );
+                        }
+                        return const Column(
+                          mainAxisAlignment: MainAxisAlignment.center,
+                          children: [
+                            Center(child: CircularProgressIndicator()),
+                            Text("참가자 확인중..."),
+                          ],
+                        );
+                      },
+                    ),
+                  ),
+                  const Divider(),
+                  const Text("퀴즈 시작 상태"),
+                  Expanded(
+                    child: StreamBuilder(
+                      stream: quizStateRef!.child("state").onValue,
+                      builder: (
+                        context,
+                        AsyncSnapshot<DatabaseEvent> snapshot,
+                      ) {
+                        if (snapshot.hasData) {
+                          print(snapshot.data?.snapshot.value);
+                          final state = snapshot.data?.snapshot.value as bool;
+                          return Center(
                             child: Column(
-                              mainAxisAlignment: MainAxisAlignment.center,
                               children: [
-                                CircularProgressIndicator(),
-                                Text('참가자 확인중...'),
+                                Text(
+                                  switch (state) {
+                                    true => "시작!",
+                                    false => "대기중",
+                                  },
+                                  style: const TextStyle(
+                                    fontSize: 32,
+                                    fontWeight: FontWeight.bold,
+                                  ),
+                                ),
                               ],
                             ),
                           );
-                        },
-                      ),
+                        }
+                        return const Center(child: CircularProgressIndicator());
+                      },
                     ),
-                    const Divider(),
-                    const Text('퀴즈 시작 상태'),
-                    Expanded(
-                      child: StreamBuilder(
-                        stream: quizStateRef?.child('state').onValue,
-                        builder: (
-                          context,
-                          AsyncSnapshot<DatabaseEvent> snapShot,
-                        ) {
-                          if (!snapShot.hasData) {
-                            return const Center(child: Text('상태 불러오는중...'));
-                          }
-                          final data = snapShot.data!.snapshot.value as bool;
-                          return Center(
-                            child: Text(
-                              switch (data) {
-                                true => '시작!',
-                                false => '대기중..',
-                              },
-                              style: const TextStyle(
-                                fontWeight: FontWeight.bold,
-                                fontSize: 32,
-                              ),
-                            ),
-                          );
-                        },
-                      ),
-                    ),
-                  ],
-                ),
+                  ),
+                ],
               ),
             ),
-            Positioned.fill(
-              child: StreamBuilder(
-                stream: quizStateRef?.onValue,
-                builder: (context, AsyncSnapshot<DatabaseEvent> snapShot) {
-                  if (snapShot.hasData) {
-                    int currentIndex = 0; //현재 문제 번호
-                    Map snapshotData = snapShot.data?.snapshot.value as Map;
-                    final state = snapshotData["state"] as bool;
-                    if (snapshotData.containsKey("current")) {
-                      currentIndex = snapshotData["current"] as int;
-                    }
-
-                    problemsTriggers.clear();
-
-                    if (snapshotData.containsKey("triggers")) {
-                      for (var element in snapshotData["triggers"]) {
-                        problemsTriggers.add({
-                          "startTime": element['startTime'],
-                          "endTime": element['endTime'],
-                        });
-                      }
-                    }
-                    //debugPrint(snapshotData.toString());
-                    //debugPrint(currentIndex.toString());
-                    //debugPrint(problemsTriggers.toString());
-                    debugPrint('확인 $state');
-                    if (state) {
-                      if (currentIndex < problemsTriggers.length) {
-                        // 문제 풀이중.
-                        return Container(
-                          color: Colors.white,
-                          child: _ProblemSolveWidget(
-                            ref: quizStateRef!,
-                            problems: problemsSets![currentIndex],
-                            uid: widget.uid,
-                            name: widget.name,
-                            startTime:
-                                problemsTriggers[currentIndex]["startTime"] ??
-                                0,
-                            endTime:
-                                problemsTriggers[currentIndex]["endTime"] ?? 0,
-                            index: currentIndex,
-                          ),
-                        );
-                      } else {
-                        // 문제 풀이 완료 후 순위 표시 화면.
-                        return Container();
-                      }
+          ),
+          Positioned.fill(
+            child: StreamBuilder(
+              stream: quizStateRef?.onValue,
+              builder: (
+                BuildContext context,
+                AsyncSnapshot<DatabaseEvent> snapshot,
+              ) {
+                if (snapshot.hasData) {
+                  int currentIndex = 0;
+                  Map snapshotData = snapshot.data?.snapshot.value as Map;
+                  final state = snapshotData["state"] as bool;
+                  if (snapshotData.containsKey("current")) {
+                    currentIndex = snapshotData["current"] as int;
+                  }
+                  problemTriggers.clear();
+                  if (snapshotData.containsKey("triggers")) {
+                    for (var element in snapshotData["triggers"]) {
+                      final trigger = element as Map;
+                      problemTriggers.add({
+                        "startTime": trigger["startTime"],
+                        "endTime": trigger["endTime"],
+                      });
                     }
                   }
-                  return const Center(child: CircularProgressIndicator());
-                },
-              ),
+                  if (state) {
+                    if (currentIndex < problemsSets.length) {
+                      // 문제가 풀이 중 인경우
+                      return Container(
+                        color: Colors.white,
+                        child: _ProblemSolveWidget(
+                          index: currentIndex,
+                          ref: quizStateRef!,
+                          problems: problemsSets[currentIndex],
+                          startTime:
+                              problemTriggers[currentIndex]["startTime"] ?? 0,
+                          endTime:
+                              problemTriggers[currentIndex]["endTime"] ?? 0,
+                          uid: widget.uid,
+                          name: widget.name,
+                        ),
+                      );
+                    } else {
+                      //문제 풀이가 종료된경우
+                      // 순위를 계산하고 표시하는 위젯
+                      calcResult();
+                      return Container(
+                        color: Colors.white,
+                        padding: const EdgeInsets.all(16),
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            const Text("퀴즈 종료"),
+                            const Divider(),
+                            const Text("순위"),
+                            Expanded(
+                              child: ListView.separated(
+                                itemBuilder: (context, index) {
+                                  return ListTile(
+                                    leading: CircleAvatar(
+                                      child: Text("${index + 1}위"),
+                                    ),
+                                    title: Text(quizResult[index]),
+                                  );
+                                },
+                                separatorBuilder:
+                                    (BuildContext context, int index) =>
+                                        const Divider(),
+                                itemCount: quizResult.length,
+                              ),
+                            ),
+                          ],
+                        ),
+                      );
+                    }
+                  }
+                }
+                return const Center(child: CircularProgressIndicator());
+              },
             ),
-          ],
-        ),
+          ),
+        ],
       ),
     );
   }
@@ -234,14 +284,16 @@ class _ProblemSolveWidget extends StatefulWidget {
   final int startTime;
   final int endTime;
   final int index;
+
   const _ProblemSolveWidget({
+    super.key,
+    required this.index,
     required this.ref,
     required this.problems,
-    required this.uid,
-    required this.name,
     required this.startTime,
     required this.endTime,
-    required this.index,
+    required this.name,
+    required this.uid,
   });
 
   @override
@@ -249,21 +301,20 @@ class _ProblemSolveWidget extends StatefulWidget {
 }
 
 class _ProblemSolveWidgetState extends State<_ProblemSolveWidget> {
-  Timer? timer; // 1초마다 타임 계산을 위해
+  Timer? timer;
 
-  int leftTime = 0; // 남은 시간
-  int readyTime = 0; // 준비 시간
+  int leftTime = 0;
+  int readyTime = 0;
 
-  bool isStart = false; // 문제 시작 했는지
-  bool isSubmit = false; // 문제 제출 했는지
+  bool isStart = false;
+  bool isSubmit = false;
 
   @override
   void dispose() {
-    timer?.cancel(); // 타이머 사용후 해제.
+    timer?.cancel();
     super.dispose();
   }
 
-  // 새로고침.
   refresh() {
     if (mounted) {
       setState(() {});
@@ -275,29 +326,20 @@ class _ProblemSolveWidgetState extends State<_ProblemSolveWidget> {
     final endTime = DateTime.fromMillisecondsSinceEpoch(widget.endTime);
 
     timer ??= Timer.periodic(const Duration(seconds: 1), (t) {
-      DateTime nowDateTime = DateTime.now();
-      // 참가자들이 입장하고 문제 출제자가 문제를 출제하면 현재 시간에서 시작시간 뺀것으로 시작 count
-      final sDiff = nowDateTime.difference(startTime); // 현재 시간에서 시작시간 뺀것.
-      // 문제 시작 시간에서  endTime(limit) 으로 한문제당 count
-      final eDiff = endTime.difference(nowDateTime);
-
-      print(sDiff);
-      print(eDiff);
+      DateTime nowDatetime = DateTime.now();
+      final sDiff = nowDatetime.difference(startTime);
+      final eDiff = endTime.difference(nowDatetime);
 
       readyTime = sDiff.inSeconds;
       leftTime = eDiff.inSeconds;
 
-      print(readyTime);
-      print(leftTime);
-
-      //문제풀이가 시작이 되면
       if (sDiff.inSeconds >= 0) {
         isStart = true;
       }
 
       if (eDiff.inSeconds <= 0) {
         int nextIndex = widget.index + 1;
-        widget.ref.child('current').set(nextIndex);
+        widget.ref.child("current").set(nextIndex);
         timer?.cancel();
         timer = null;
         isStart = false;
@@ -313,16 +355,16 @@ class _ProblemSolveWidgetState extends State<_ProblemSolveWidget> {
     return switch (isStart) {
       true => Column(
         children: [
-          Text('문제', style: Theme.of(context).textTheme.headlineLarge),
+          Text("문제", style: Theme.of(context).textTheme.headlineLarge),
           Text(
-            widget.problems.title!,
+            "${widget.problems.title}",
             style: Theme.of(context).textTheme.headlineLarge,
           ),
           Expanded(
             child:
                 isSubmit
                     ? Text(
-                      '제출완료',
+                      "제출 완료",
                       style: Theme.of(context).textTheme.headlineMedium,
                     )
                     : GridView.builder(
@@ -330,24 +372,43 @@ class _ProblemSolveWidgetState extends State<_ProblemSolveWidget> {
                           const SliverGridDelegateWithFixedCrossAxisCount(
                             crossAxisCount: 2,
                           ),
-                      itemCount: widget.problems.options!.length,
+                      itemCount: widget.problems.options?.length,
                       itemBuilder: (context, index) {
-                        final item = widget.problems.options![index];
+                        final item = widget.problems.options?[index];
                         return GestureDetector(
-                          onTap: () {},
+                          onTap: () async {
+                            final result = await widget.ref
+                                .child("solve/${widget.index}")
+                                .push()
+                                .set({
+                                  "name": widget.name,
+                                  "uid": widget.uid,
+                                  "answer": item,
+                                  "correct":
+                                      widget.problems.answerIndex == index
+                                          ? true
+                                          : false,
+                                  "timestamp":
+                                      DateTime.now().millisecondsSinceEpoch,
+                                });
+                            setState(() {
+                              isSubmit = true;
+                            });
+                          },
                           child: Card(
                             child: Column(
-                              mainAxisAlignment: MainAxisAlignment.center,
                               crossAxisAlignment: CrossAxisAlignment.center,
+                              mainAxisAlignment: MainAxisAlignment.center,
                               children: [
                                 Text(
-                                  '${index + 1} 번',
+                                  "${index + 1} 번",
                                   style: const TextStyle(
                                     fontWeight: FontWeight.bold,
+                                    fontSize: 24,
                                   ),
                                 ),
                                 Text(
-                                  item,
+                                  "${item}",
                                   style: const TextStyle(fontSize: 24),
                                 ),
                               ],
@@ -358,12 +419,81 @@ class _ProblemSolveWidgetState extends State<_ProblemSolveWidget> {
                     ),
           ),
           Text(
-            '$leftTime 초',
+            "$leftTime초",
             style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 42),
           ),
         ],
       ),
-      false => Container(),
+      false => Container(
+        child:
+            widget.index > 0
+                ? Column(
+                  children: [
+                    const Text("곧 다음 퀴즈가 시작됩니다."),
+                    Expanded(
+                      child: StreamBuilder(
+                        stream:
+                            widget.ref
+                                .child("solve/${widget.index - 1}")
+                                .orderByChild("timestamp")
+                                .onValue,
+                        builder: (
+                          BuildContext context,
+                          AsyncSnapshot<DatabaseEvent> snapshot,
+                        ) {
+                          if (snapshot.hasData) {
+                            final items =
+                                snapshot.data?.snapshot.children.toList()
+                                    as List;
+                            return ListView.separated(
+                              itemBuilder: (context, index) {
+                                final snapshot = items[index] as DataSnapshot;
+                                final item = snapshot.value as Map;
+                                return ListTile(
+                                  leading: CircleAvatar(
+                                    child: Text("${index + 1} 위"),
+                                  ),
+                                  title: Text("${item["name"]}"),
+                                  trailing:
+                                      item["correct"]
+                                          ? const Icon(
+                                            Icons.check_circle_outline,
+                                            color: Colors.green,
+                                          )
+                                          : const Icon(
+                                            Icons.clear,
+                                            color: Colors.red,
+                                          ),
+                                  subtitle: Text(
+                                    "${DateTime.fromMillisecondsSinceEpoch(item["timestamp"])}",
+                                  ),
+                                );
+                              },
+                              separatorBuilder: (context, _) => const Divider(),
+                              itemCount: items.length,
+                            );
+                          }
+                          return const CircularProgressIndicator();
+                        },
+                      ),
+                    ),
+                    Text(
+                      "${readyTime * -1}",
+                      style: Theme.of(context).textTheme.displayLarge,
+                    ),
+                  ],
+                )
+                : Column(
+                  children: [
+                    const Text("대기중\n곧 퀴즈가 시작됩니다. "),
+                    Expanded(child: Container()),
+                    Text(
+                      "${readyTime * -1}",
+                      style: Theme.of(context).textTheme.displayLarge,
+                    ),
+                  ],
+                ),
+      ),
     };
   }
 }

@@ -197,60 +197,60 @@ class _QuizManagerPageState extends State<QuizManagerPage> {
   }
 
   startQuiz(Quiz item) async {
-    final stateRef =
-        await database.ref('quizStatus/${item.quizDetailRef}/state').get();
-    final currentState = stateRef.value as bool;
-    if (currentState) {
-      return;
-    }
+    final ref =
+        await database.ref("quizStatus/${item.quizDetailRef}/state").get();
+    final currentState = ref.value as bool;
+    if (!currentState) {
+      final quizDetailRef =
+          await database.ref("quizDetail/${item.quizDetailRef}").get();
 
-    // 문제의 개수.
-    final detailRef =
-        await database.ref('quizDetail/${item.quizDetailRef}').get();
-    final problemCount = detailRef.child('problems').children.length;
+      final problemCount =
+          quizDetailRef.child("/problems").children.length ?? 0;
 
-    DateTime nowDateTime = DateTime.now();
-    List<Map> triggerTimes = [];
+      DateTime nowDatetime = DateTime.now();
+      List<Map> triggerTimes = [];
+      int solveTime = 5;
+      for (var i = 0; i < problemCount; i++) {
+        final startTime = nowDatetime.add(
+          Duration(seconds: 5 + (i * solveTime)),
+        );
+        final endTime = startTime.add(const Duration(seconds: 5));
+        triggerTimes.add({
+          "startTime": startTime.millisecondsSinceEpoch,
+          "endTime": endTime.millisecondsSinceEpoch,
+        });
+        nowDatetime = endTime;
+      }
 
-    int solveTime = 5; //문제별 푸는 시간.
+      if (mounted) {
+        showDialog(
+          context: context,
+          builder:
+              (context) => AlertDialog(
+                content: const Text("퀴즈를 시작할까요? "),
+                title: const Text("안내"),
+                actions: [
+                  TextButton(
+                    onPressed: () async {
+                      await database
+                          .ref("quizStatus/${item.quizDetailRef}")
+                          .update({
+                            "state": true,
+                            "current": 0,
+                            "triggers": triggerTimes,
+                          });
 
-    for (var i = 0; i < problemCount; i++) {
-      final startTime = nowDateTime.add(Duration(seconds: 5 + (i * solveTime)));
-      final endTime = startTime.add(const Duration(seconds: 5));
-      triggerTimes.add({
-        "startTime": startTime.millisecondsSinceEpoch,
-        "endTime": endTime.millisecondsSinceEpoch,
-      });
-      nowDateTime = endTime;
-    }
-    if (!mounted) return;
-    showDialog(
-      context: context,
-      builder:
-          (context) => AlertDialog(
-            content: const Text('퀴즈를 시작할까요?'),
-            actions: [
-              TextButton(
-                onPressed: () {
-                  Navigator.of(context).pop();
-                },
-                child: const Text('No'),
+                      if (context.mounted) {
+                        Navigator.of(context).pop();
+                      }
+                    },
+                    child: const Text("네"),
+                  ),
+                ],
               ),
-              TextButton(
-                onPressed: () async {
-                  await database.ref('quizStatus/${item.quizDetailRef}').update(
-                    {"state": true, "current": 0, "triggers": triggerTimes},
-                  );
-
-                  if (!context.mounted) return;
-
-                  Navigator.of(context).pop();
-                },
-                child: const Text('Yes'),
-              ),
-            ],
-          ),
-    );
+        );
+      }
+    }
   }
 
   @override
